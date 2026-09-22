@@ -1,0 +1,289 @@
+zabbix_export:
+  version: '8.0'
+  template_groups:
+
+    # Responsible for Collecting: Hypervisors
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000001
+      name: Hypervisors
+  templates:
+
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000002
+      template: Scope Virtualisation KVM
+      name: 'Scope: Virtualisation (KVM)'
+      description: 'Master template for KVM Virtualisation utilizing LLD discovery
+        for guests.'
+
+# TEMPLATE GROUPS
+# Categorizes the template in the Zabbix UI
+      groups:
+
+        - name: Hypervisors
+
+# DISCOVERY RULES (LLD)
+# Automatically detects resources like disks or containers dynamically.
+      discovery_rules:
+
+        # Responsible for Collecting: Hypervisor Daemon Discovery
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000003
+          name: 'Hypervisor Daemon Discovery'
+          type: ZABBIX_ACTIVE
+          key: 'systemd.unit.discovery[service]'
+          delay: 10m
+          filter:
+            conditions:
+              - macro: '{#UNIT.NAME}'
+                value: '^(libvirtd\.service|virtqemud\.service)$'
+                formulaid: A
+          item_prototypes:
+
+            # Responsible for Collecting: Hypervisor Daemon: {#UNIT.NAME}
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000004
+              name: 'Hypervisor Daemon: {#UNIT.NAME}'
+              type: ZABBIX_ACTIVE
+              key: 'systemd.unit.info["{#UNIT.NAME}"]'
+              value_type: TEXT
+              delay: 1m
+          trigger_prototypes:
+
+            # Responsible for Alerting: [OBS-F-035] CRITICAL: Virtualisation Management Service ({#UNIT.NAME})
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000005
+              expression: 'find(/Scope Virtualisation KVM/systemd.unit.info["{#UNIT.NAME}"],,"like","ActiveState=active")=0'
+              name: '[OBS-F-035] CRITICAL: Virtualisation Management Service ({#UNIT.NAME})
+                is down'
+              priority: HIGH
+
+        # Responsible for Collecting: KVM Guest Discovery
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000008
+          name: KVM Guest Discovery
+          type: ZABBIX_ACTIVE
+          key: kvm.vm.discovery
+          delay: 2m
+          item_prototypes:
+
+            # Responsible for Collecting: VM {#VMNAME}: Power State
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000006
+              name: 'VM {#VMNAME}: Power State'
+              type: ZABBIX_ACTIVE
+              key: kvm.vm.state[{#VMNAME}]
+              value_type: TEXT
+              delay: 1m
+
+            # Responsible for Collecting: VM {#VMNAME}: Primary Disk Provisioned Size
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000021
+              name: 'VM {#VMNAME}: Primary Disk Provisioned Size'
+              type: ZABBIX_ACTIVE
+              key: kvm.vm.disk.capacity[{#VMNAME}]
+              value_type: FLOAT
+              units: B
+              delay: 1h
+
+            # Responsible for Collecting: VM {#VMNAME}: Primary Disk Actual Physical Size
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000022
+              name: 'VM {#VMNAME}: Primary Disk Actual Physical Size'
+              type: ZABBIX_ACTIVE
+              key: kvm.vm.disk.allocation[{#VMNAME}]
+              value_type: FLOAT
+              units: B
+              delay: 1h
+
+            # Responsible for Collecting: VM {#VMNAME}: Active Snapshot Count
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000023
+              name: 'VM {#VMNAME}: Active Snapshot Count'
+              type: ZABBIX_ACTIVE
+              key: kvm.vm.snapshot.count[{#VMNAME}]
+              value_type: FLOAT
+              delay: 1h
+
+            # Responsible for Collecting: VM {#VMNAME}: Lifecycle & Error Log
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000019
+              name: 'VM {#VMNAME}: Lifecycle & Error Log'
+              type: ZABBIX_ACTIVE
+              key: 'log[/var/log/libvirt/qemu/{#VMNAME}.log,"(?i)(error|failed|shutting
+                down|starting|started)"]'
+              value_type: LOG
+              delay: 1s
+
+            # Responsible for Collecting: VM {#VMNAME}: CPU Utilization (Seconds/s)
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000009
+              name: 'VM {#VMNAME}: CPU Utilization (Seconds/s)'
+              type: ZABBIX_ACTIVE
+              key: kvm.vm.cpu.time[{#VMNAME}]
+              value_type: FLOAT
+              delay: 1m
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '1e-09'
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+
+            # Responsible for Collecting: VM {#VMNAME}: Memory Used
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000010
+              name: 'VM {#VMNAME}: Memory Used'
+              type: ZABBIX_ACTIVE
+              key: kvm.vm.ram.used[{#VMNAME}]
+              value_type: FLOAT
+              units: B
+              delay: 1m
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '1024'
+          trigger_prototypes:
+
+            # Responsible for Alerting: [OBS-F-038] WARNING: Guest VM {#VMNAME} is shut off
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000007
+              expression: find(/Scope Virtualisation 
+                KVM/kvm.vm.state[{#VMNAME}],,"like","shut off")=1
+              name: '[OBS-F-038] WARNING: Guest VM {#VMNAME} is shut off'
+              priority: WARNING
+
+            # Responsible for Alerting: [OBS-F-048] CRITICAL: VM {#VMNAME} Thin Provision Ratio > 2:1
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000024
+              expression: last(/Scope Virtualisation 
+                KVM/kvm.vm.disk.capacity[{#VMNAME}])/last(/Scope Virtualisation 
+                KVM/kvm.vm.disk.allocation[{#VMNAME}])>2
+              name: '[OBS-F-048] CRITICAL: VM {#VMNAME} Thin Provision Ratio > 2:1'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-048] WARNING: VM {#VMNAME} Thin Provision Ratio > 1.5:1
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000025
+              expression: last(/Scope Virtualisation 
+                KVM/kvm.vm.disk.capacity[{#VMNAME}])/last(/Scope Virtualisation 
+                KVM/kvm.vm.disk.allocation[{#VMNAME}])>1.5
+              name: '[OBS-F-048] WARNING: VM {#VMNAME} Thin Provision Ratio > 1.5:1'
+              priority: WARNING
+              dependencies:
+
+                - name: '[OBS-F-048] CRITICAL: VM {#VMNAME} Thin Provision Ratio >
+                    2:1'
+                  expression: last(/Scope Virtualisation 
+                    KVM/kvm.vm.disk.capacity[{#VMNAME}])/last(/Scope 
+                    Virtualisation KVM/kvm.vm.disk.allocation[{#VMNAME}])>2
+
+            # Responsible for Alerting: [OBS-F-049] CRITICAL: VM {#VMNAME} Snapshot older than 7 Days
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000026
+              expression: min(/Scope Virtualisation 
+                KVM/kvm.vm.snapshot.count[{#VMNAME}],7d)>0
+              name: '[OBS-F-049] CRITICAL: VM {#VMNAME} Snapshot older than 7 Days'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-049] WARNING: VM {#VMNAME} Snapshot older than 72 Hours
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000027
+              expression: min(/Scope Virtualisation 
+                KVM/kvm.vm.snapshot.count[{#VMNAME}],72h)>0
+              name: '[OBS-F-049] WARNING: VM {#VMNAME} Snapshot older than 72 Hours'
+              priority: WARNING
+              dependencies:
+
+                - name: '[OBS-F-049] CRITICAL: VM {#VMNAME} Snapshot older than 7
+                    Days'
+                  expression: min(/Scope Virtualisation 
+                    KVM/kvm.vm.snapshot.count[{#VMNAME}],7d)>0
+
+
+        # Responsible for Collecting: KVM Storage Pool Discovery
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000011
+          name: KVM Storage Pool Discovery
+          type: ZABBIX_ACTIVE
+          key: kvm.pool.discovery
+          delay: 10m
+          item_prototypes:
+
+            # Responsible for Collecting: Storage Pool {#POOLNAME}: Total Capacity
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000012
+              name: 'Storage Pool {#POOLNAME}: Total Capacity'
+              type: ZABBIX_ACTIVE
+              key: kvm.pool.capacity[{#POOLNAME}]
+              value_type: FLOAT
+              units: B
+              delay: 1h
+
+            # Responsible for Collecting: Storage Pool {#POOLNAME}: Available Free Space
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000013
+              name: 'Storage Pool {#POOLNAME}: Available Free Space'
+              type: ZABBIX_ACTIVE
+              key: kvm.pool.available[{#POOLNAME}]
+              value_type: FLOAT
+              units: B
+              delay: 5m
+          trigger_prototypes:
+
+            # Responsible for Alerting: [OBS-F-046] CRITICAL: KVM Storage Pool {#POOLNAME} free space
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000014
+              expression: last(/Scope Virtualisation 
+                KVM/kvm.pool.available[{#POOLNAME}])/last(/Scope Virtualisation 
+                KVM/kvm.pool.capacity[{#POOLNAME}])*100<10
+              name: '[OBS-F-046] CRITICAL: KVM Storage Pool {#POOLNAME} free space
+                < 10%'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-046] WARNING: KVM Storage Pool {#POOLNAME} free space
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000020
+              expression: last(/Scope Virtualisation 
+                KVM/kvm.pool.available[{#POOLNAME}])/last(/Scope Virtualisation 
+                KVM/kvm.pool.capacity[{#POOLNAME}])*100<20
+              name: '[OBS-F-046] WARNING: KVM Storage Pool {#POOLNAME} free space
+                < 20%'
+              priority: WARNING
+              dependencies:
+
+                - name: '[OBS-F-046] CRITICAL: KVM Storage Pool {#POOLNAME} free space
+                    < 10%'
+                  expression: last(/Scope Virtualisation 
+                    KVM/kvm.pool.available[{#POOLNAME}])/last(/Scope 
+                    Virtualisation KVM/kvm.pool.capacity[{#POOLNAME}])*100<10
+
+        # Responsible for Collecting: Virtual Network Component Discovery
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000015
+          name: Virtual Network Component Discovery
+          type: ZABBIX_ACTIVE
+          key: net.if.discovery
+          delay: 10m
+          filter:
+            conditions:
+              - macro: '{#IFNAME}'
+                value: '^(virbr[0-9]+|vnet[0-9]+)$'
+                formulaid: A
+          item_prototypes:
+
+            # Responsible for Collecting: Virtual Network {#IFNAME}: Operational State
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000016
+              name: 'Virtual Network {#IFNAME}: Operational State'
+              type: ZABBIX_ACTIVE
+              key: 'vfs.file.contents[/sys/class/net/{#IFNAME}/operstate]'
+              value_type: TEXT
+              delay: 1m
+
+            # Responsible for Collecting: Virtual Network {#IFNAME}: Incoming Traffic
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000017
+              name: 'Virtual Network {#IFNAME}: Incoming Traffic'
+              type: ZABBIX_ACTIVE
+              key: 'net.if.in[{#IFNAME}]'
+              value_type: FLOAT
+              units: bps
+              delay: 1m
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+
+            # Responsible for Collecting: Virtual Network {#IFNAME}: Outgoing Traffic
+            - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000018
+              name: 'Virtual Network {#IFNAME}: Outgoing Traffic'
+              type: ZABBIX_ACTIVE
+              key: 'net.if.out[{#IFNAME}]'
+              value_type: FLOAT
+              units: bps
+              delay: 1m
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                  parameters:
+                    - ''
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'

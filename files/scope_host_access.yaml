@@ -1,0 +1,229 @@
+zabbix_export:
+  version: '8.0'
+  template_groups:
+
+    # Responsible for Collecting: Scope Templates
+    - uuid: 8ef96b18c230490a9a0a9e2307226339
+      name: Scope Templates
+
+  templates:
+
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000100
+      template: Scope Host Access
+      name: Scope Host Access
+      description: |
+        Monitors interactive host access - successful and failed logins,
+        logouts, console access and brute force thresholds - natively from the
+        Linux audit log (/var/log/audit/audit.log).
+
+        Log source: auditd, not rsyslog. The requirements spreadsheet names
+        ausearch/audit records as the primary collection method for SEC-F-001,
+        002, 004 and 016, with /var/log/secure only as an alternative. auditd
+        writes its own log from the kernel audit netlink socket and does not
+        depend on rsyslog or journald being enabled.
+
+        Access: granted through the log_group setting in /etc/audit/auditd.conf,
+        which auditd reapplies on every log rotation.
+
+        Counting note: a failed SSH authentication produces one USER_AUTH
+        record per password attempt, but only one USER_LOGIN record per
+        connection. Measured on this host, three wrong passwords in a single
+        session produced USER_AUTH +3 and USER_LOGIN +1.
+
+        Annex B counts attempts, so the failed-login items count USER_AUTH. They
+        filter on the login service (sshd, login) because sudo also writes
+        USER_AUTH records, which belong to the Privileged Activity cluster.
+
+        The previous rsyslog based version is retained as
+        scope_host_access_rsyslog.yaml.
+
+# TEMPLATE GROUPS
+# Categorizes the template in the Zabbix UI
+      groups:
+
+        - name: Scope Templates
+
+# MACROS (VARIABLES)
+# Account classes for the three brute force thresholds in Annex B.
+# Prefixed HA_ so they cannot collide with the Privileged Activity template,
+# which defines its own privileged account macro on the same host.
+      macros:
+
+        - macro: '{$HA_PRIV_ACCOUNT}'
+          value: frqadmin
+          description: 'Privileged/administrative account. Drives SEC-TH-003 (3/5 in 5 min).'
+
+        - macro: '{$HA_STD_ACCOUNT}'
+          value: testuser
+          description: 'Standard interactive account. Drives SEC-TH-002 (5/8 in 5 min). Set to a real interactive user on this host.'
+
+        - macro: '{$HA_SVC_ACCOUNT}'
+          value: zabbix
+          description: 'Service/non-interactive account. Drives SEC-TH-001 (3/5 in 10 min).'
+
+# ITEMS (DATA COLLECTION)
+# These define the exact metrics collected from the host.
+      items:
+
+        # Responsible for Collecting: [SEC-F-001] every successful interactive login
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000101
+          name: 'Host Access: Successful Logins'
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/audit/audit.log,"type=USER_LOGIN.*res=success"]
+          value_type: LOG
+          delay: 1s
+          description: |
+            Captures every successful login regardless of authentication method.
+            The record carries acct, addr, hostname and terminal, satisfying the
+            username, timestamp and source information the requirement asks for.
+          tags:
+
+            - tag: requirement
+              value: SEC-F-001
+
+        # Responsible for Collecting: [SEC-F-002] every failed login attempt, any account
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000102
+          name: 'Host Access: Failed Logins (All Accounts)'
+          type: ZABBIX_ACTIVE
+          key: log.count[/var/log/audit/audit.log,"type=USER_AUTH.*(sshd|/usr/bin/login).*res=failed"]
+          value_type: UNSIGNED
+          delay: 1m
+          description: |
+            SEC-F-002 requires every failed attempt to be recorded, not only
+            those against named accounts. The per-account items below exist to
+            drive the Annex B thresholds and do not replace this one.
+
+            Counts USER_AUTH, which is written once per password attempt.
+            USER_LOGIN is written once per connection and would undercount by
+            the number of retries sshd allows.
+          tags:
+
+            - tag: requirement
+              value: SEC-F-002
+
+        # Responsible for Collecting: [SEC-F-004] session end for interactive sessions
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000103
+          name: 'Host Access: Session Closed'
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/audit/audit.log,"type=USER_END.*res=success"]
+          value_type: LOG
+          delay: 1s
+          tags:
+
+            - tag: requirement
+              value: SEC-F-004
+
+        # Responsible for Collecting: [SEC-F-003] failed logins against the privileged account
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000109
+          name: 'Host Access: Failed Logins (Privileged Account)'
+          type: ZABBIX_ACTIVE
+          key: log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_PRIV_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"]
+          value_type: UNSIGNED
+          delay: 1m
+          tags:
+
+            - tag: requirement
+              value: SEC-F-003
+
+        # Responsible for Collecting: [SEC-F-003] failed logins against the standard account
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000104
+          name: 'Host Access: Failed Logins (Standard Account)'
+          type: ZABBIX_ACTIVE
+          key: log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_STD_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"]
+          value_type: UNSIGNED
+          delay: 1m
+          tags:
+
+            - tag: requirement
+              value: SEC-F-003
+
+        # Responsible for Collecting: [SEC-F-003] failed logins against the service account
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000105
+          name: 'Host Access: Failed Logins (Service Account)'
+          type: ZABBIX_ACTIVE
+          key: log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_SVC_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"]
+          value_type: UNSIGNED
+          delay: 1m
+          description: 'A service account uses stored credentials and should almost never fail authentication, hence the tighter threshold over a longer window.'
+          tags:
+
+            - tag: requirement
+              value: SEC-F-003
+
+        # Responsible for Collecting: [SEC-F-016] access through the physical or serial console
+        - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000106
+          name: 'Host Access: Console and Serial Console Logins'
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/audit/audit.log,"type=USER_LOGIN.*terminal=tty.*res=success"]
+          value_type: LOG
+          delay: 1s
+          description: |
+            The audit terminal field distinguishes the access path: ssh for
+            network, tty1..N for the physical console, ttyS0 for serial. This
+            item records console and serial console access, which bypass network
+            authentication controls.
+
+            Out of scope: the platform management controller (iDRAC/iLO), which
+            bypasses the OS entirely and requires an IPMI/Redfish template.
+          tags:
+
+            - tag: requirement
+              value: SEC-F-016
+
+# TRIGGERS (ALARMS)
+# Mathematical thresholds that evaluate item data to fire alerts.
+  triggers:
+
+    # Responsible for Alerting: [SEC-F-003] SEC-TH-002 critical, standard account
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000110
+      expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_STD_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],5m)>=8
+      name: '[SEC-F-003] CRITICAL: Brute force on standard account {$HA_STD_ACCOUNT} (8 in 5 min)'
+      priority: HIGH
+      description: 'SEC-TH-002 critical threshold.'
+
+    # Responsible for Alerting: [SEC-F-003] SEC-TH-002 warning, standard account
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000111
+      expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_STD_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],5m)>=5
+      name: '[SEC-F-003] WARNING: Brute force on standard account {$HA_STD_ACCOUNT} (5 in 5 min)'
+      priority: WARNING
+      description: 'SEC-TH-002 warning threshold.'
+      dependencies:
+
+        - name: '[SEC-F-003] CRITICAL: Brute force on standard account {$HA_STD_ACCOUNT} (8 in 5 min)'
+          expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_STD_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],5m)>=8
+
+    # Responsible for Alerting: [SEC-F-003] SEC-TH-003 critical, privileged account
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000112
+      expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_PRIV_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],5m)>=5
+      name: '[SEC-F-003] CRITICAL: Brute force on privileged account {$HA_PRIV_ACCOUNT} (5 in 5 min)'
+      priority: HIGH
+      description: 'SEC-TH-003 critical threshold.'
+
+    # Responsible for Alerting: [SEC-F-003] SEC-TH-003 warning, privileged account
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000113
+      expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_PRIV_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],5m)>=3
+      name: '[SEC-F-003] WARNING: Brute force on privileged account {$HA_PRIV_ACCOUNT} (3 in 5 min)'
+      priority: WARNING
+      description: 'SEC-TH-003 warning threshold.'
+      dependencies:
+
+        - name: '[SEC-F-003] CRITICAL: Brute force on privileged account {$HA_PRIV_ACCOUNT} (5 in 5 min)'
+          expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_PRIV_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],5m)>=5
+
+    # Responsible for Alerting: [SEC-F-003] SEC-TH-001 critical, service account
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000114
+      expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_SVC_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],10m)>=5
+      name: '[SEC-F-003] CRITICAL: Brute force on service account {$HA_SVC_ACCOUNT} (5 in 10 min)'
+      priority: HIGH
+      description: 'SEC-TH-001 critical threshold. Note the 10 minute window, which differs from SEC-TH-002 and SEC-TH-003.'
+
+    # Responsible for Alerting: [SEC-F-003] SEC-TH-001 warning, service account
+    - uuid: b8a9b8c2d1e443a2b5c6d7e8f9000115
+      expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_SVC_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],10m)>=3
+      name: '[SEC-F-003] WARNING: Brute force on service account {$HA_SVC_ACCOUNT} (3 in 10 min)'
+      priority: WARNING
+      description: 'SEC-TH-001 warning threshold.'
+      dependencies:
+
+        - name: '[SEC-F-003] CRITICAL: Brute force on service account {$HA_SVC_ACCOUNT} (5 in 10 min)'
+          expression: sum(/Scope Host Access/log.count[/var/log/audit/audit.log,"type=USER_AUTH.*acct=.{$HA_SVC_ACCOUNT}..*(sshd|/usr/bin/login).*res=failed"],10m)>=5

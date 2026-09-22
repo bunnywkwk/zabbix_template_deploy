@@ -1,0 +1,9 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Import each requirement-cluster template into the Zabbix server
+  community.zabbix.zabbix_template:
+    template_yaml: "{{ lookup('file', item + '.yaml') }}"
+    state: present
+  loop: "{{ zabbix_template_files }}"
+  loop_control:
+    label: "{{ item }}"

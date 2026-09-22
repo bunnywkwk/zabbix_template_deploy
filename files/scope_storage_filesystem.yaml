@@ -1,0 +1,198 @@
+zabbix_export:
+  version: '8.0'
+  template_groups:
+
+    # Responsible for Collecting: Linux servers
+    - uuid: 5a97cba405954c39bb9badda87a6bf72
+      name: Linux servers
+  templates:
+
+    - uuid: 6da27ad883c2484482853dca5ef8c0f8
+      template: Scope Storage and Filesystem
+      name: 'Scope: Storage & Filesystem'
+      description: Targeted Master Template utilizing strict Filtered LLD for 
+        physical filesystems.
+
+# TEMPLATE GROUPS
+# Categorizes the template in the Zabbix UI
+      groups:
+
+        - name: Linux servers
+
+# ITEMS (DATA COLLECTION)
+# These define the exact metrics collected from the host.
+      items:
+
+        # Responsible for Collecting: Global: Mount Options (Read-Only Check)
+        - uuid: 1e9bd8c7ec204806a16f8c7a25cdc717
+          name: 'Global: Mount Options (Read-Only Check)'
+          type: ZABBIX_ACTIVE
+          key: vfs.file.contents[/proc/mounts]
+          value_type: TEXT
+          delay: 1m
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-023] CRITICAL: A physical filesystem is mounted Read-Only
+            - uuid: 9762ae98ac5846958b611ffa06e27dd7
+              expression: find(/Scope Storage and 
+                Filesystem/vfs.file.contents[/proc/mounts],,"regexp","(?m)^/dev/.*
+                ro,")=1
+              name: '[OBS-F-023] CRITICAL: A physical filesystem is mounted Read-Only'
+              priority: HIGH
+
+# DISCOVERY RULES (LLD)
+# Automatically detects resources like disks or containers dynamically.
+      discovery_rules:
+
+        # Responsible for Collecting: Physical Filesystem Discovery
+        - uuid: 98f1b9f110544fa4a7f2ce0082653e9d
+          name: Physical Filesystem Discovery
+          type: ZABBIX_ACTIVE
+          key: vfs.fs.discovery
+          delay: 1m
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: '{#FSTYPE}'
+                value: ^(ext4|xfs|btrfs)$
+                formulaid: A
+          item_prototypes:
+
+            # Responsible for Collecting: FS {#FSNAME}: Space Utilisation
+            - uuid: cfaf99471f4f4e4f8dd0d112e1aa2fa6
+              name: 'FS {#FSNAME}: Space Utilisation'
+              type: ZABBIX_ACTIVE
+              key: vfs.fs.size[{#FSNAME},pused]
+              value_type: FLOAT
+              units: '%'
+              delay: 1m
+
+            # Responsible for Collecting: FS {#FSNAME}: Predicted Time to Full
+            - uuid: cb68e30d253444e59d44786f0546fe77
+              name: 'FS {#FSNAME}: Predicted Time to Full'
+              type: CALCULATED
+              key: vfs.fs.timeleft[{#FSNAME}]
+              value_type: FLOAT
+              units: s
+              delay: 10m
+              params: timeleft(//vfs.fs.size[{#FSNAME},pused],1h,100)
+
+            # Responsible for Collecting: FS {#FSNAME}: Inode Utilisation
+            - uuid: 10c02949fafb45ceb31b2247094f9597
+              name: 'FS {#FSNAME}: Inode Utilisation'
+              type: ZABBIX_ACTIVE
+              key: vfs.fs.inode[{#FSNAME},pused]
+              value_type: FLOAT
+              units: '%'
+              delay: 1m
+          trigger_prototypes:
+
+            # Responsible for Alerting: [OBS-F-021] CRITICAL: {#FSNAME} space > 90%
+            - uuid: 516de52f060945fdb3c83acf0dffb027
+              expression: min(/Scope Storage and 
+                Filesystem/vfs.fs.size[{#FSNAME},pused],5m)>90
+              name: '[OBS-F-021] CRITICAL: {#FSNAME} space > 90%'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-021] WARNING: {#FSNAME} space > 80%
+            - uuid: c6ff590a69ca446d9d4e4b5acbfbdbe3
+              expression: min(/Scope Storage and 
+                Filesystem/vfs.fs.size[{#FSNAME},pused],5m)>80
+              name: '[OBS-F-021] WARNING: {#FSNAME} space > 80%'
+              priority: WARNING
+              dependencies:
+
+                - name: '[OBS-F-021] CRITICAL: {#FSNAME} space > 90%'
+                  expression: min(/Scope Storage and 
+                    Filesystem/vfs.fs.size[{#FSNAME},pused],5m)>90
+
+            # Responsible for Alerting: [OBS-F-021] CRITICAL: {#FSNAME} predicted full in < 24 hours
+            - uuid: 7e11694fbd444e348432addc30bc9dbb
+              expression: last(/Scope Storage and 
+                Filesystem/vfs.fs.timeleft[{#FSNAME}])<86400 and last(/Scope 
+                Storage and Filesystem/vfs.fs.timeleft[{#FSNAME}])<>-1
+              name: '[OBS-F-021] CRITICAL: {#FSNAME} predicted full in < 24 hours'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-021] WARNING: {#FSNAME} predicted full in < 7 days
+            - uuid: 6507e3ed6a0a4817b6a950e6450eaf2c
+              expression: last(/Scope Storage and 
+                Filesystem/vfs.fs.timeleft[{#FSNAME}])<604800 and last(/Scope 
+                Storage and Filesystem/vfs.fs.timeleft[{#FSNAME}])<>-1
+              name: '[OBS-F-021] WARNING: {#FSNAME} predicted full in < 7 days'
+              priority: WARNING
+              dependencies:
+
+                - name: '[OBS-F-021] CRITICAL: {#FSNAME} predicted full in < 24 hours'
+                  expression: last(/Scope Storage and 
+                    Filesystem/vfs.fs.timeleft[{#FSNAME}])<86400 and last(/Scope
+                    Storage and Filesystem/vfs.fs.timeleft[{#FSNAME}])<>-1
+
+            # Responsible for Alerting: [OBS-F-022] CRITICAL: {#FSNAME} inode utilisation > 90%
+            - uuid: bab589c052bd4353ac54d56cae9ecd9e
+              expression: min(/Scope Storage and 
+                Filesystem/vfs.fs.inode[{#FSNAME},pused],5m)>90
+              name: '[OBS-F-022] CRITICAL: {#FSNAME} inode utilisation > 90%'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-022] WARNING: {#FSNAME} inode utilisation > 80%
+            - uuid: 17e7c72ffd8644a28abf117ab305075a
+              expression: min(/Scope Storage and 
+                Filesystem/vfs.fs.inode[{#FSNAME},pused],5m)>80
+              name: '[OBS-F-022] WARNING: {#FSNAME} inode utilisation > 80%'
+              priority: WARNING
+              dependencies:
+
+                # Responsible for Collecting: LVM Volume Group Discovery
+                - name: '[OBS-F-022] CRITICAL: {#FSNAME} inode utilisation > 90%'
+                  expression: min(/Scope Storage and 
+                    Filesystem/vfs.fs.inode[{#FSNAME},pused],5m)>90
+
+        # Responsible for Collecting: LVM Volume Group Discovery
+        - uuid: a7f9b8c2d1e443a2b5c6d7e8f9000001
+          name: LVM Volume Group Discovery
+          type: ZABBIX_ACTIVE
+          key: lvm.vg.discovery
+          delay: 10m
+          item_prototypes:
+
+            # Responsible for Collecting: LVM {#VGNAME}: Free Space
+            - uuid: a7f9b8c2d1e443a2b5c6d7e8f9000002
+              name: 'LVM {#VGNAME}: Free Space'
+              type: ZABBIX_ACTIVE
+              key: lvm.vg.free[{#VGNAME}]
+              value_type: FLOAT
+              units: B
+              delay: 5m
+
+            # Responsible for Collecting: LVM {#VGNAME}: Total Size
+            - uuid: a7f9b8c2d1e443a2b5c6d7e8f9000003
+              name: 'LVM {#VGNAME}: Total Size'
+              type: ZABBIX_ACTIVE
+              key: lvm.vg.size[{#VGNAME}]
+              value_type: FLOAT
+              units: B
+              delay: 1h
+          trigger_prototypes:
+
+            # Responsible for Alerting: [OBS-F-028] CRITICAL: LVM {#VGNAME} free space < 10%
+            - uuid: a7f9b8c2d1e443a2b5c6d7e8f9000004
+              expression: last(/Scope Storage and 
+                Filesystem/lvm.vg.free[{#VGNAME}])/last(/Scope Storage and 
+                Filesystem/lvm.vg.size[{#VGNAME}])*100<10
+              name: '[OBS-F-028] CRITICAL: LVM {#VGNAME} free space < 10%'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-028] WARNING: LVM {#VGNAME} free space < 20%
+            - uuid: a7f9b8c2d1e443a2b5c6d7e8f9000005
+              expression: last(/Scope Storage and 
+                Filesystem/lvm.vg.free[{#VGNAME}])/last(/Scope Storage and 
+                Filesystem/lvm.vg.size[{#VGNAME}])*100<20
+              name: '[OBS-F-028] WARNING: LVM {#VGNAME} free space < 20%'
+              priority: WARNING
+              dependencies:
+
+                - name: '[OBS-F-028] CRITICAL: LVM {#VGNAME} free space < 10%'
+                  expression: last(/Scope Storage and 
+                    Filesystem/lvm.vg.free[{#VGNAME}])/last(/Scope Storage and 
+                    Filesystem/lvm.vg.size[{#VGNAME}])*100<10

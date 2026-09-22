@@ -1,0 +1,129 @@
+zabbix_export:
+  version: '8.0'
+  template_groups:
+
+    # Responsible for Collecting: Scope Templates
+    - uuid: 8ef96b18c230490a9a0a9e2307226339
+      name: Scope Templates
+
+  templates:
+
+    - uuid: c9b9b8c2d1e443a2b5c6d7e8f9000200
+      template: Scope Privileged Activity
+      name: Scope Privileged Activity
+      description: |
+        Monitors sudo usage, elevation failures and direct privileged logins
+        natively from the Linux audit log (/var/log/audit/audit.log).
+
+        Log source: auditd, not rsyslog. The requirements spreadsheet names the
+        audit subsystem as the primary collection method for SEC-F-005, 018 and
+        019, with /var/log/secure only as an alternative. auditd writes its own
+        log directly from the kernel audit netlink socket and does not depend on
+        rsyslog or journald being enabled.
+
+        Access: granted through the log_group setting in /etc/audit/auditd.conf
+        rather than an ACL, so auditd reapplies it on every log rotation.
+
+        The previous rsyslog based version of this template is retained as
+        scope_privileged_activity_rsyslog.yaml.
+
+# TEMPLATE GROUPS
+# Categorizes the template in the Zabbix UI
+      groups:
+
+        - name: Scope Templates
+
+# MACROS (VARIABLES)
+# Dynamic variables that can be overridden per-host.
+      macros:
+
+        - macro: '{$PRIV_ACCOUNT}'
+          value: root
+          description: 'The designated privileged account that should never be logged into directly.'
+
+# ITEMS (DATA COLLECTION)
+# These define the exact metrics collected from the host.
+      items:
+
+        # Responsible for Collecting: [SEC-F-005] successful privilege elevation
+        - uuid: c9b9b8c2d1e443a2b5c6d7e8f9000201
+          name: 'Privilege: Sudo Command Execution'
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/audit/audit.log,"type=USER_CMD.*res=success"]
+          value_type: LOG
+          delay: 1s
+          description: |
+            USER_CMD records every command executed through sudo, carrying the
+            invoking account (auid), the working directory and the command.
+
+            Note: the cmd= field is hex encoded whenever the command contains
+            spaces, and plain text otherwise. The record is captured verbatim;
+            decoding is not performed by the agent.
+          tags:
+
+            - tag: requirement
+              value: SEC-F-005
+
+        # Responsible for Collecting: [SEC-F-018] failed privilege elevation, both failure modes
+        - uuid: c9b9b8c2d1e443a2b5c6d7e8f9000202
+          name: 'Privilege: Failed Sudo Execution'
+          type: ZABBIX_ACTIVE
+          key: log.count[/var/log/audit/audit.log,"type=(USER_AUTH|USER_CMD).*sudo.*res=failed"]
+          value_type: UNSIGNED
+          delay: 1m
+          description: |
+            Counts both elevation failure modes in one item:
+            USER_AUTH res=failed  - wrong password at the sudo prompt
+            USER_CMD  res=failed  - command not permitted for the account
+          tags:
+
+            - tag: requirement
+              value: SEC-F-018
+
+        # Responsible for Collecting: [SEC-F-019] interactive login directly to a privileged account
+        - uuid: c9b9b8c2d1e443a2b5c6d7e8f9000203
+          name: 'Privilege: Direct Privileged Login'
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/audit/audit.log,"type=USER_LOGIN.*acct=.{$PRIV_ACCOUNT}..*res=success"]
+          value_type: LOG
+          delay: 1s
+          description: |
+            A successful USER_LOGIN recorded against the privileged account
+            itself, rather than elevation performed from a named user account.
+
+            Matches the spreadsheet's stated method for SEC-F-019, "login
+            records where the account is root". The dots around the macro match
+            the quotes auditd places around the account name, avoiding nested
+            quoting inside the item key.
+          tags:
+
+            - tag: requirement
+              value: SEC-F-019
+
+# TRIGGERS (ALARMS)
+# Mathematical thresholds that evaluate item data to fire alerts.
+  triggers:
+
+    # Responsible for Alerting: [SEC-F-018] CRITICAL: Repeated Failed Privilege Escalation (5 in 10 min)
+    - uuid: c9b9b8c2d1e443a2b5c6d7e8f9000204
+      expression: sum(/Scope Privileged Activity/log.count[/var/log/audit/audit.log,"type=(USER_AUTH|USER_CMD).*sudo.*res=failed"],10m)>=5
+      name: '[SEC-F-018] CRITICAL: Repeated Failed Privilege Escalation (5 in 10 min)'
+      priority: HIGH
+      description: 'SEC-TH-007 critical threshold.'
+
+    # Responsible for Alerting: [SEC-F-018] WARNING: Repeated Failed Privilege Escalation (3 in 10 min)
+    - uuid: c9b9b8c2d1e443a2b5c6d7e8f9000205
+      expression: sum(/Scope Privileged Activity/log.count[/var/log/audit/audit.log,"type=(USER_AUTH|USER_CMD).*sudo.*res=failed"],10m)>=3
+      name: '[SEC-F-018] WARNING: Repeated Failed Privilege Escalation (3 in 10 min)'
+      priority: WARNING
+      description: 'SEC-TH-007 warning threshold.'
+      dependencies:
+
+        - name: '[SEC-F-018] CRITICAL: Repeated Failed Privilege Escalation (5 in 10 min)'
+          expression: sum(/Scope Privileged Activity/log.count[/var/log/audit/audit.log,"type=(USER_AUTH|USER_CMD).*sudo.*res=failed"],10m)>=5
+
+    # Responsible for Alerting: [SEC-F-019] CRITICAL: Direct interactive login to the privileged account
+    - uuid: c9b9b8c2d1e443a2b5c6d7e8f9000206
+      expression: length(last(/Scope Privileged Activity/log[/var/log/audit/audit.log,"type=USER_LOGIN.*acct=.{$PRIV_ACCOUNT}..*res=success"]))>0 and nodata(/Scope Privileged Activity/log[/var/log/audit/audit.log,"type=USER_LOGIN.*acct=.{$PRIV_ACCOUNT}..*res=success"],5m)=0
+      name: '[SEC-F-019] CRITICAL: Direct interactive login to {$PRIV_ACCOUNT} detected!'
+      priority: HIGH

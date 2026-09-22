@@ -1,0 +1,399 @@
+zabbix_export:
+  version: '8.0'
+  template_groups:
+
+    # Template group this template is filed under
+    - uuid: edfd22a248e64e6180afd9c250651a47
+      name: Linux servers
+  templates:
+
+    - uuid: 9dcdc417e84944e1990cf4f2283fc98d
+      template: Scope Host Health and Availability
+      name: 'Scope: Host Health & Availability'
+      description: Targeted Master Template with explicit critical services.
+
+# TEMPLATE GROUPS
+# Categorizes the template in the Zabbix UI
+      groups:
+
+        - name: Linux servers
+
+# ITEMS (DATA COLLECTION)
+# These define the exact metrics collected from the host.
+      items:
+
+        # Responsible for Collecting: [OBS-F-001] agent heartbeat
+        - uuid: c12f1a079a9142729599345e06613606
+          name: Zabbix Agent Ping
+          type: ZABBIX_ACTIVE
+          key: agent.ping
+          value_type: UNSIGNED
+          delay: 1m
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-001] CRITICAL: Zabbix agent is unreachable for 3 minutes
+            - uuid: 99ac79b1ce694bef8eb37c0f8989aee7
+              expression: nodata(/Scope Host Health and 
+                Availability/agent.ping,3m)=1
+              name: '[OBS-F-001] CRITICAL: Zabbix agent is unreachable for 3 minutes'
+              priority: HIGH
+
+        # Responsible for Collecting: [OBS-F-005] system uptime, used to detect a restart
+        - uuid: 260a6aa99dd840dd80a2526232a0a0e9
+          name: System Uptime
+          type: ZABBIX_ACTIVE
+          key: system.uptime
+          value_type: UNSIGNED
+          units: uptime
+          delay: 1m
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-005] WARNING: Host has been restarted (uptime < 10m)
+            - uuid: 6e8c7199edad4952ba3fae377a0b19c9
+              expression: last(/Scope Host Health and 
+                Availability/system.uptime)<10m
+              name: '[OBS-F-005] WARNING: Host has been restarted (uptime < 10m)'
+              priority: WARNING
+
+        # Responsible for Collecting: [OBS-F-003] total CPU utilisation
+        - uuid: d3c50d8e79ab48febe488be18589326a
+          name: CPU Utilisation
+          type: ZABBIX_ACTIVE
+          key: system.cpu.util
+          value_type: FLOAT
+          units: '%'
+          delay: 1m
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-003] CRITICAL: CPU > 95%
+            - uuid: f7f1b32dae5b4653ace4096480443599
+              expression: min(/Scope Host Health and 
+                Availability/system.cpu.util,5m)>95
+              name: '[OBS-F-003] CRITICAL: CPU > 95%'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-003] WARNING: CPU > 80%
+            - uuid: 4b9abccc83e2433a983dbb7d64294b00
+              expression: min(/Scope Host Health and 
+                Availability/system.cpu.util,5m)>80
+              name: '[OBS-F-003] WARNING: CPU > 80%'
+              priority: WARNING
+              dependencies:
+
+                # Depends on the CRITICAL trigger above, so WARNING is suppressed while CRITICAL is active
+                - name: '[OBS-F-003] CRITICAL: CPU > 95%'
+                  expression: min(/Scope Host Health and 
+                    Availability/system.cpu.util,5m)>95
+
+        # Responsible for Collecting: [OBS-F-003] CPU time spent waiting on I/O
+        - uuid: ff109ecb8499469f8fc52bcc54d959f6
+          name: CPU I/O Wait
+          type: ZABBIX_ACTIVE
+          key: system.cpu.util[,iowait]
+          value_type: FLOAT
+          units: '%'
+          delay: 1m
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-003] CRITICAL: CPU I/O Wait > 40% (5m)
+            - uuid: fefa5ddca1cb420a99f94fda04845aa4
+              expression: min(/Scope Host Health and 
+                Availability/system.cpu.util[,iowait],5m)>40
+              name: '[OBS-F-003] CRITICAL: CPU I/O Wait > 40% (5m)'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-003] WARNING: CPU I/O Wait > 20% (5m)
+            - uuid: 38a9b7b7264946efb1ae15bae25edceb
+              expression: min(/Scope Host Health and 
+                Availability/system.cpu.util[,iowait],5m)>20
+              name: '[OBS-F-003] WARNING: CPU I/O Wait > 20% (5m)'
+              priority: WARNING
+              dependencies:
+
+                # Depends on the CRITICAL trigger above, so WARNING is suppressed while CRITICAL is active
+                - name: '[OBS-F-003] CRITICAL: CPU I/O Wait > 40% (5m)'
+                  expression: min(/Scope Host Health and 
+                    Availability/system.cpu.util[,iowait],5m)>40
+
+        # Responsible for Collecting: [OBS-F-003] available memory as a percentage
+        - uuid: da5db9a2c04d430c87facb0dd63853d7
+          name: Available Memory
+          type: ZABBIX_ACTIVE
+          key: vm.memory.size[pavailable]
+          value_type: FLOAT
+          units: '%'
+          delay: 1m
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-003] CRITICAL: Mem < 10%
+            - uuid: a807a072eb6e4fabb2cb0b0f89fd4ffa
+              expression: last(/Scope Host Health and 
+                Availability/vm.memory.size[pavailable])<10
+              name: '[OBS-F-003] CRITICAL: Mem < 10%'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-003] WARNING: Mem < 20%
+            - uuid: f7a8ec80c13c40c7827f9c0dd7538ca6
+              expression: last(/Scope Host Health and 
+                Availability/vm.memory.size[pavailable])<20
+              name: '[OBS-F-003] WARNING: Mem < 20%'
+              priority: WARNING
+              dependencies:
+
+                # Depends on the CRITICAL trigger above, so WARNING is suppressed while CRITICAL is active
+                - name: '[OBS-F-003] CRITICAL: Mem < 10%'
+                  expression: last(/Scope Host Health and 
+                    Availability/vm.memory.size[pavailable])<10
+
+        # Responsible for Collecting: [OBS-F-003] free swap as a percentage
+        - uuid: 5cac75211b1a4a12806d6e396633e20e
+          name: Free Swap
+          type: ZABBIX_ACTIVE
+          key: system.swap.size[,pfree]
+          value_type: FLOAT
+          units: '%'
+          delay: 1m
+          description: 'Swap space utilisation, collected as data for OBS-F-003. Annex A sets no threshold on free space; OBS-TH-003 is a swap activity rate and is alerted on the two items below.'
+
+        # Responsible for Collecting: [OBS-F-003] pages swapped in per second
+        - uuid: 7c204ed7fdc74d1cbb3af1af46b47518
+          name: Swap In Rate
+          type: ZABBIX_ACTIVE
+          key: system.swap.in[,pages]
+          value_type: FLOAT
+          units: pages/s
+          delay: 1m
+          description: 'Cumulative pswpin counter from /proc/vmstat, converted to a per-second rate.'
+          preprocessing:
+
+            - type: CHANGE_PER_SECOND
+              parameters:
+                - ''
+
+        # Responsible for Collecting: [OBS-F-003] pages swapped out per second
+        - uuid: 2391f975180141ceb5a5eca557eea266
+          name: Swap Out Rate
+          type: ZABBIX_ACTIVE
+          key: system.swap.out[,pages]
+          value_type: FLOAT
+          units: pages/s
+          delay: 1m
+          description: 'Cumulative pswpout counter from /proc/vmstat, converted to a per-second rate.'
+          preprocessing:
+
+            - type: CHANGE_PER_SECOND
+              parameters:
+                - ''
+
+        # Responsible for Collecting: [OBS-F-013] error, failure and panic lines from the system log
+        - uuid: 5d3e9481669949f8b27350e29b35c9e0
+          name: Kernel Errors Log
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/messages,"(?i)kernel:.*(error|fail|panic)"]
+          value_type: LOG
+          delay: 1s
+          description: 'Kernel lines only. The previous pattern matched any line containing error or failed, including userspace daemons such as NetworkManager.'
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-013] WARNING: kernel error logged
+            - uuid: d08fb93d250d4a3d91c13212bc5835f0
+              expression: 'length(last(/Scope Host Health and Availability/log[/var/log/messages,"(?i)kernel:.*(error|fail|panic)"]))>0 and nodata(/Scope Host Health and Availability/log[/var/log/messages,"(?i)kernel:.*(error|fail|panic)"],5m)=0'
+              name: '[OBS-F-013] WARNING: Kernel error logged on {HOST.NAME}'
+              priority: WARNING
+              description: 'OBS-F-013. Annex A sets no threshold. Fires on a new matching line and clears after 5 minutes without one.'
+
+        # Responsible for Collecting: [OBS-F-015] out-of-memory events from the system log
+        - uuid: 868fe899b2384dccafc45711c881d730
+          name: Out of Memory Log
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/messages,"Out of memory"]
+          value_type: LOG
+          delay: 1s
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-015] HIGH: kernel killed a process (out of memory)
+            - uuid: 4f53d31bb3f84604bf92b20b75e8a104
+              expression: 'length(last(/Scope Host Health and Availability/log[/var/log/messages,"Out of memory"]))>0 and nodata(/Scope Host Health and Availability/log[/var/log/messages,"Out of memory"],5m)=0'
+              name: '[OBS-F-015] HIGH: Out-of-memory kill on {HOST.NAME}'
+              priority: HIGH
+              description: 'OBS-F-015. The log line names the terminated process. Fires on a new matching line and clears after 5 minutes without one.'
+
+        # Responsible for Collecting: [OBS-F-002] shutdown, reboot and start-up events
+        - uuid: 4ccca982a0b747c493ab1e68a6b7bbd3
+          name: Lifecycle Event Log
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/messages,"shutdown|reboot|Starting up"]
+          value_type: LOG
+          delay: 1s
+
+        # Responsible for Collecting: [OBS-F-012] units that failed to start
+        - uuid: 0c59ad7c7f674d6ca8e33064598147a3
+          name: Boot Outcome Log
+          type: ZABBIX_ACTIVE
+          key: log[/var/log/messages,"Failed to start"]
+          value_type: LOG
+          delay: 1s
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-012] WARNING: a unit failed to start
+            - uuid: 52c07cbc3fd348fbab5eac7b098542e7
+              expression: 'length(last(/Scope Host Health and Availability/log[/var/log/messages,"Failed to start"]))>0 and nodata(/Scope Host Health and Availability/log[/var/log/messages,"Failed to start"],5m)=0'
+              name: '[OBS-F-012] WARNING: A unit failed to start on {HOST.NAME}'
+              priority: WARNING
+              description: 'OBS-F-012. The log line names the affected unit. Fires on a new matching line and clears after 5 minutes without one.'
+
+        # Responsible for Collecting: [OBS-F-016] CPU used by the critical process, % of one core
+        - uuid: 0433944f0c7d4a9c8b1693f2dd28c07f
+          name: 'Process CPU: Zabbix Agent'
+          type: ZABBIX_ACTIVE
+          key: proc.cpu.util[zabbix_agent2]
+          value_type: FLOAT
+          units: '%'
+          delay: 1m
+          description: 'Returned as a percentage of a single CPU core, the unit OBS-TH-005 uses.'
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-016] WARNING: critical process using 80% of one core for 10 minutes
+            - uuid: 7c1e5a2f9b3d4e6f8a0b1c2d3e4f5a62
+              expression: min(/Scope Host Health and Availability/proc.cpu.util[zabbix_agent2],10m)>=80
+              name: '[OBS-F-016] WARNING: Critical process zabbix_agent2 using >= 80% of one core for 10 min'
+              priority: WARNING
+              description: 'OBS-TH-005. Sustained over 10 minutes as Annex A specifies. Warning level only.'
+
+        # Responsible for Collecting: [OBS-F-016] memory used by the critical process, % of host memory
+        - uuid: b6afa24c77aa497596960d8cedaa748b
+          name: 'Process Mem: Zabbix Agent'
+          type: ZABBIX_ACTIVE
+          key: proc.mem[zabbix_agent2,,,,pmem]
+          value_type: FLOAT
+          units: '%'
+          delay: 1m
+          description: 'pmem is process memory as a percentage of host memory, the unit OBS-TH-006 uses. Key order is name,user,mode,cmdline,memtype.'
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-016] WARNING: critical process using 80% of host memory
+            - uuid: 7c1e5a2f9b3d4e6f8a0b1c2d3e4f5a61
+              expression: last(/Scope Host Health and Availability/proc.mem[zabbix_agent2,,,,pmem])>=80
+              name: '[OBS-F-016] WARNING: Critical process zabbix_agent2 using >= 80% of host memory'
+              priority: WARNING
+              description: 'OBS-TH-006. Annex A defines a warning level only.'
+
+        # Responsible for Collecting: [OBS-F-018] system-wide descriptor limit (fs.file-max)
+        - uuid: fa053d81b50e4adb93a72ae58bd8c5fe
+          name: Global Max File Descriptors
+          type: ZABBIX_ACTIVE
+          key: kernel.maxfiles
+          value_type: UNSIGNED
+          delay: 10m
+
+        # Responsible for Collecting: [OBS-F-018] descriptors currently allocated system-wide
+        - uuid: 2f00a5d2f8bb402c8f92979cb5086333
+          name: Used File Descriptors
+          type: ZABBIX_ACTIVE
+          key: vfs.file.contents[/proc/sys/fs/file-nr]
+          value_type: UNSIGNED
+          delay: 1m
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - ^(\d+)
+                - '\1'
+
+        # Responsible for Collecting: [OBS-F-018] allocated descriptors as a percentage of the limit
+        - uuid: b141a2c7dc5d42498686aab340bd3fd0
+          name: File Descriptor Usage Percentage
+          type: CALCULATED
+          key: fd.usage.percent
+          value_type: FLOAT
+          units: '%'
+          delay: 1m
+          params: 100 * last(//vfs.file.contents[/proc/sys/fs/file-nr]) / 
+            last(//kernel.maxfiles)
+          description: 'Known limitation: on RHEL 9/10 fs.file-max defaults to 2^63-1, so this percentage stays near 0 and the OBS-TH-008 triggers cannot fire. Kept because they are correct wherever a finite limit is configured.'
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-018] CRITICAL: File Descriptor Usage > 85%
+            - uuid: e1fe05aafaad49d19c44df0fae93e27e
+              expression: last(/Scope Host Health and 
+                Availability/fd.usage.percent)>85
+              name: '[OBS-F-018] CRITICAL: File Descriptor Usage > 85%'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-018] WARNING: File Descriptor Usage > 70%
+            - uuid: 2d508e7940124aa995455515c7b7a3fc
+              expression: last(/Scope Host Health and 
+                Availability/fd.usage.percent)>70
+              name: '[OBS-F-018] WARNING: File Descriptor Usage > 70%'
+              priority: WARNING
+              dependencies:
+
+                # Depends on the CRITICAL trigger above, so WARNING is suppressed while CRITICAL is active
+                - name: '[OBS-F-018] CRITICAL: File Descriptor Usage > 85%'
+                  expression: last(/Scope Host Health and 
+                    Availability/fd.usage.percent)>85
+
+        # Responsible for Collecting: [OBS-F-004] active state of the representative critical service
+        - uuid: 2a9c1beaa2d84b6791cde0cc29d223fb
+          name: 'Service Status: SSH'
+          type: ZABBIX_ACTIVE
+          key: systemd.unit.info[sshd.service,ActiveState]
+          value_type: CHAR
+          delay: 1m
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-004] CRITICAL: SSH Service is down
+            - uuid: ed16a37da9214dac90df22ae021b37f0
+              expression: last(/Scope Host Health and 
+                Availability/systemd.unit.info[sshd.service,ActiveState])<>"active"
+              name: '[OBS-F-004] CRITICAL: SSH Service is down'
+              priority: HIGH
+
+        # Responsible for Collecting: [OBS-F-017] automatic restart counter of the representative service
+        - uuid: 00979a20237341dbb26d9c10c32cbd1f
+          name: 'Service Restarts: SSH'
+          type: ZABBIX_ACTIVE
+          key: systemd.unit.info[sshd.service,NRestarts,Service]
+          value_type: UNSIGNED
+          delay: 1m
+          triggers:
+
+            # Responsible for Alerting: [OBS-F-017] CRITICAL: SSH restarted 5 times in 10m
+            - uuid: 18899b2492c94cb1923f8fe4fb6ce1e6
+              expression: (last(/Scope Host Health and 
+                Availability/systemd.unit.info[sshd.service,NRestarts,Service]) - 
+                min(/Scope Host Health and 
+                Availability/systemd.unit.info[sshd.service,NRestarts,Service],10m)) >= 
+                5
+              name: '[OBS-F-017] CRITICAL: SSH Service restarted 5 times in 10m'
+              priority: HIGH
+
+            # Responsible for Alerting: [OBS-F-017] WARNING: SSH restarted 3 times in 10m
+            - uuid: 84cff71c19e24c25847f3c0067951a7a
+              expression: (last(/Scope Host Health and 
+                Availability/systemd.unit.info[sshd.service,NRestarts,Service]) - 
+                min(/Scope Host Health and 
+                Availability/systemd.unit.info[sshd.service,NRestarts,Service],10m)) >= 
+                3
+              name: '[OBS-F-017] WARNING: SSH Service restarted 3 times in 10m'
+              priority: WARNING
+              dependencies:
+
+                # Depends on the CRITICAL trigger above, so WARNING is suppressed while CRITICAL is active
+                - name: '[OBS-F-017] CRITICAL: SSH Service restarted 5 times in 10m'
+                  expression: (last(/Scope Host Health and 
+                    Availability/systemd.unit.info[sshd.service,NRestarts,Service]) - 
+                    min(/Scope Host Health and 
+                    Availability/systemd.unit.info[sshd.service,NRestarts,Service],10m))
+                    >= 5
+
+# TRIGGERS (TEMPLATE LEVEL)
+# A trigger whose expression spans more than one item belongs at export top
+# level. Single item triggers stay nested under their item above.
+  triggers:
+
+    # Responsible for Alerting: [OBS-F-003] WARNING: sustained swap activity for 5 minutes
+    - uuid: 531321e438114d1aab0059393e116101
+      expression: min(/Scope Host Health and Availability/system.swap.in[,pages],5m)>0 or min(/Scope Host Health and Availability/system.swap.out[,pages],5m)>0
+      name: '[OBS-F-003] WARNING: Sustained swap activity for 5 minutes'
+      priority: WARNING
+      description: 'OBS-TH-003, any sustained 5 min. min() over 5 minutes above zero means every sample in the window showed paging in or out. Annex A defines a warning level only.'
