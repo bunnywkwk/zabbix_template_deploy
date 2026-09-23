@@ -1,13 +1,2 @@
 #SPDX-License-Identifier: MIT-0
 ---
-# The 6 current requirement-cluster templates to import into the Zabbix
-# server, named by their files/ filename without the .yaml extension.
-# The superseded _rsyslog variants (host_access, privileged_activity)
-# are intentionally left out - they're prior drafts, not current.
-zabbix_template_files:
-  - scope_host_health
-  - scope_storage_filesystem
-  - scope_virtualisation
-  - scope_containers
-  - scope_host_access
-  - scope_privileged_activity
