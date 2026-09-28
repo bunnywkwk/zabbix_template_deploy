@@ -31,6 +31,13 @@ earlier `_rsyslog`-suffixed draft in the source documentation project
 (`~/zabbix/`) that was superseded by an audit-log-based approach — those
 drafts are deliberately left out here.
 
+Documentation
+-------------
+
+`docs/TASK_EXPLANATION.md` walks through every file and line of this role,
+with the justification for each, the security notes, the real error messages,
+and why the role is needed.
+
 Requirements
 ------------
 
